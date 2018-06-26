@@ -82,7 +82,18 @@ class ViewController: UIViewController {
     }
   }
   var updater: CADisplayLink?
-  var currentFrame: AVAudioFramePosition = 0
+  var currentFrame: AVAudioFramePosition {
+    guard
+      // player.lastRenderTime returns the time in reference to engine start time. If engine is not running, lastRenderTime returns nil
+      let lastRenderTime = player.lastRenderTime,
+    // player.playerTime(forNodeTime:) converts lastRenderTime to time relative to player start time. If player is not playing, then playerTime returns nil
+    let playerTime = player.playerTime(forNodeTime: lastRenderTime)
+      else {
+        return 0
+    }
+    return playerTime.sampleTime
+    
+  }
   var skipFrame: AVAudioFramePosition = 0
   var currentPosition: AVAudioFramePosition = 0
   let pauseImageHeight: Float = 26.0
@@ -102,6 +113,11 @@ class ViewController: UIViewController {
     countUpLabel.text = formatted(time: 0)
     countDownLabel.text = formatted(time: audioLengthSeconds)
     setupAudio()
+    
+    // update display
+    updater = CADisplayLink(target: self, selector: #selector(updateUI))
+    updater?.add(to: .current, forMode: .defaultRunLoopMode)
+    updater?.isPaused = true
   }
 
   override func viewDidAppear(_ animated: Bool) {
@@ -121,6 +137,25 @@ extension ViewController {
   }
 
   @IBAction func playTapped(_ sender: UIButton) {
+    // toggle play pause button
+    sender.isSelected = !sender.isSelected
+    // Use player.isPlaying to determine if the player currently playing. If so, pause it; if not, play. You also check needsFileScheduled and reschedule the file if required
+    if player.isPlaying {
+      disconnectVolumeTap()
+      // pause CADisplay
+      updater?.isPaused = true
+      player.pause()
+    } else {
+      // check if it needs rescheduling before playing
+      if needsFileScheduled {
+        needsFileScheduled = false
+        scheduleAudioFile()
+      }
+      connectVolumeTap()
+      // start CADisplay
+      updater?.isPaused = false
+      player.play()
+    }
   }
 
   @IBAction func plus10Tapped(_ sender: UIButton) {
@@ -135,6 +170,25 @@ extension ViewController {
   }
 
   @objc func updateUI() {
+    // The property skipFrame is an offset added to or subtracted from currentFrame, initially set to zero. Make sure currentPosition doesn’t fall outside the range of the file
+    currentPosition = currentFrame + skipFrame
+    currentPosition = max(currentPosition, 0)
+    currentPosition = min(currentPosition, audioLengthSamples)
+    // get current progress fraction
+    progressBar.progress = Float(currentPosition)/Float(audioLengthSamples)
+    // get current position in audio file in seconds
+    let time = Float(currentPosition)/audioSampleRate
+    // set left label time text using format helper
+    countUpLabel.text = formatted(time: time)
+    // set right label
+    countDownLabel.text = formatted(time: audioLengthSeconds - time)
+    // if reached end of audio file
+    if currentPosition >= audioLengthSamples {
+      player.stop()
+      updater?.isPaused = true
+      playPauseButton.isSelected = false
+      disconnectVolumeTap()
+    }
   }
 }
 
@@ -206,6 +260,13 @@ extension ViewController {
   }
 
   func scheduleAudioFile() {
+    //
+    guard let audioFile = audioFile else { return }
+    skipFrame = 0
+    player.scheduleFile(audioFile, at: nil) {
+      [weak self] in self?.needsFileScheduled = true
+    }
+    
   }
 
   func connectVolumeTap() {
