@@ -187,10 +187,6 @@ extension ViewController {
 //
 extension ViewController {
   func setupAudio() {
-    // 1
-    audioFileURL = Bundle.main.url(forResource: "Intro", withExtension: "mp4")
-    // 2
-    engine.attach(player)
     
   }
 
