@@ -187,7 +187,22 @@ extension ViewController {
 //
 extension ViewController {
   func setupAudio() {
-    
+    // 1
+    // local url of audio file
+    audioFileURL = Bundle.main.url(forResource: "Intro", withExtension: "mp4")
+    // 2
+    // attach player node ro audio engine
+    engine.attach(player)
+    // connect audio engine to mainMixerNode
+    engine.connect(player, to: engine.mainMixerNode, format: audioFormat)
+    // prepare to play engine
+    engine.prepare()
+    // start engine in a try catch block
+    do {
+      try engine.start()
+    } catch let err {
+      print(err.localizedDescription)
+    }
   }
 
   func scheduleAudioFile() {
