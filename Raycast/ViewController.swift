@@ -270,9 +270,51 @@ extension ViewController {
   }
 
   func connectVolumeTap() {
+    // get audio data format for main mixer's output node
+    let format = engine.mainMixerNode.outputFormat(forBus: 0)
+    // install an output puller on the bus, that pulls buffer of size 1024
+    engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1024, format: format) { (buffer, when) in
+      guard
+        let channelData = buffer.floatChannelData,
+        let updater = self.updater
+      else { return }
+      // buffer.floatChannelData gives you an array of pointers to each sample’s data. channelDataValue is an array of UnsafeMutablePointer<Float>
+      let channelDataValue = channelData.pointee
+      // I do not fully understand this, like...what
+      let channelDataValueArray = stride(from: 0, to: Int(buffer.frameLength), by: buffer.stride).map{ channelDataValue[$0] }
+      // calculate root mean square
+      let rms = sqrt(channelDataValueArray.map{$0 * $0}.reduce(0, +) / Float(buffer.frameLength))
+      // convert rms to decibels
+      let avgPower = 20 * log10(rms)
+      // scale to value suitable for VU meter
+      let meterLevel = self.scaledPower(power: avgPower)
+      // run thread to do something
+      DispatchQueue.main.async {
+        self.volumeMeterHeight.constant = !updater.isPaused ? CGFloat(min((meterLevel * self.pauseImageHeight), self.pauseImageHeight)) : 0.0
+      }
+    }
+  }
+  
+  // helper method to scale power
+  // scaledPower(power:) converts the negative power decibel value to a positive value that adjusts the volumeMeterHeight.constant value above
+  func scaledPower(power: Float) -> Float {
+    // check if power is a finite value
+    guard power.isFinite else { return 0.0 }
+    // dB range is -80 to 0 dB. Power is 0.0 to 1.0. Scale accordingly
+    if power < minDb {
+      return 0.0
+    } else if power >= 1.0 {
+      return 1.0
+    } else {
+      // return scaled
+      // fabs is float absolute
+      return ( (fabs(minDb) - fabs(power)) / fabs(minDb) )
+    }
   }
 
   func disconnectVolumeTap() {
+    // AVAudioEngine only allows one tap per bus. Remove it when not in use
+    
   }
 
   func seek(to time: Float) {
