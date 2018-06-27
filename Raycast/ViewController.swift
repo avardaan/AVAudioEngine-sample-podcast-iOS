@@ -314,10 +314,36 @@ extension ViewController {
 
   func disconnectVolumeTap() {
     // AVAudioEngine only allows one tap per bus. Remove it when not in use
-    
+    engine.mainMixerNode.removeTap(onBus: 0)
+    volumeMeterHeight.constant = 0.0
   }
 
   func seek(to time: Float) {
+    guard
+      let audioFile = audioFile,
+      let updater = updater
+      else { return }
+    
+    // get current frame using time * audioSamples, then make sure it is within start and end of audiofile
+    skipFrame = currentPosition + AVAudioFramePosition(time * audioSampleRate)
+    skipFrame = max(skipFrame, 0)
+    skipFrame = min(skipFrame, audioLengthSamples)
+    currentPosition = skipFrame
+    
+    // stop player and clear schedules
+    player.stop()
+    //
+    if currentPosition < audioLengthSamples {
+      updateUI()
+      needsFileScheduled = false
+      // what, wtf is weak self...??
+      // player.scheduleSegment(_:startingFrame:frameCount:at:) schedules playback starting at skipFrame position of audioFile. frameCount is the number of frames to play. You want to play to the end of file, so set it to audioLengthSamples - skipFrame. Finally, at: nil specifies to start playback immediately instead of at some time in the future
+      player.scheduleSegment(audioFile, startingFrame: skipFrame, frameCount: AVAudioFrameCount(audioLengthSamples - skipFrame), at: nil) { [weak self] in self?.needsFileScheduled = true }
+      //
+      if !updater.isPaused {
+        player.play()
+      }
+    }
   }
 
 }
