@@ -247,8 +247,12 @@ extension ViewController {
     // 2
     // attach player node ro audio engine
     engine.attach(player)
-    // connect audio engine to mainMixerNode
-    engine.connect(player, to: engine.mainMixerNode, format: audioFormat)
+    // attach rateEffect
+    engine.attach(rateEffect)
+    // connect player to rateEffect
+    engine.connect(player, to: rateEffect, format: audioFormat)
+    // connect rateEffect to mainMixerNode
+    engine.connect(rateEffect, to: engine.mainMixerNode, format: audioFormat)
     // prepare to play engine
     engine.prepare()
     // start engine in a try catch block
